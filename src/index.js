@@ -202,10 +202,11 @@ function validateMessage (params) {
   }
   // const PATTERN = /^(?:fixup!\s*)?(\w*)(\(([\w$.\-*/]+)\))*: (.*)$/; // type(scope-min-3-chars): min-5-chars-starting-with-lowercase-letter
   // /^(?:fixup!\s*)?(\w*)(\(([\w$.\-*/]+)\))*: (.*)$/;
-  const regStr = '^(' + TYPES.join('|') + '){1}(\\(([\\w$.\\-*/]+)\\))*: (.*)$';
+  const regStr = '^#(?:\\d)+ (' + TYPES.join('|') + '){1}(\\(([\\w$.\\-*/]+)\\))*: (.*)$';
   // /^(✨feat|🐛修复|📝文档|💄格式|♻️重构|⚡️性能|✅测试|🔧工具|⏪回滚){1}(?:fixup!\s*)?(\w*)(\(([\w$.\-*/]+)\))*: (.*)$/
   const PATTERN = new RegExp(regStr);
   const match = PATTERN.exec(firstLine);
+
   if (!match) {
     return {
       message: `Does not match "${regStr}" Was: ${firstLine}`,
