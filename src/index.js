@@ -25,7 +25,6 @@ const path = require('path');
 const chalk = require('chalk');
 const MAX_LENGTH = 100;
 // Make commit scope optional.
-const PATTERN = /^(?:fixup!\s*)?(\w*)(\(([\w$.\-*/]+)\))*: (.*)$/; // type(scope-min-3-chars): min-5-chars-starting-with-lowercase-letter
 const IGNORED = /^Merge branch|WIP:|Release v/;
 const BREAKING_CHANGE_PATTERN = /BREAKING CHANGE:/;
 const MIN_SUBJECT_LENGTH = 3;
@@ -53,7 +52,7 @@ module.exports = {
   getIssueFromBranch,
 };
 
-function validateCommitMsgFileName(params) {
+function validateCommitMsgFileName (params) {
   const { commitMsgFileName } = params;
 
   if (typeof commitMsgFileName !== 'string' || !commitMsgFileName) {
@@ -65,7 +64,7 @@ function validateCommitMsgFileName(params) {
   return params;
 }
 
-function initVars(params) {
+function initVars (params) {
   // Add the variables we need for downstream functions.
   // Allow certain props to be overriden to make testing easier
   const newAppRoot = params.APP_ROOT || process.cwd();
@@ -81,21 +80,14 @@ function initVars(params) {
   };
 }
 
-function readConfigFile(params) {
+function readConfigFile (params) {
   const { PKG, APP_ROOT } = params;
-  const czCustomizableKey = 'cz-customizable';
-
-  // Check config is correct
-  if (!PKG.config || !PKG.config[czCustomizableKey] || !PKG.config[czCustomizableKey].config) {
-    logger.error(chalk.bold.red('cz-customisable config not specified in package.json!'));
-    throw new Error('cz-customisable config not specified in package.json!');
-  }
 
   let czConfig = undefined;
   try {
-    const configFilePath = path.join(APP_ROOT, PKG.config['cz-customizable'].config);
+    const configFilePath = path.join(APP_ROOT, '.cz-config.js');
     logger.debug('cz-customizable config file:', configFilePath);
-    czConfig = require(path.join(APP_ROOT, PKG.config['cz-customizable'].config));
+    czConfig = require(configFilePath);
   } catch (e) {
     logger.info(chalk.bold.red('cz-customisable config in package.json points to an invalid file.'));
     throw new Error('cz-customisable config in package.json points to an invalid file.');
@@ -107,7 +99,7 @@ function readConfigFile(params) {
   };
 }
 
-function readCommitMessageFile(params) {
+function readCommitMessageFile (params) {
   const { commitMsgFileName, fs } = params;
 
   let buffer = '';
@@ -127,7 +119,7 @@ function readCommitMessageFile(params) {
   };
 }
 
-function checkMessage(params) {
+function checkMessage (params) {
   const { msg, commitMsgFileName, fs } = params;
   const { status, message } = validateMessage(params);
 
@@ -156,7 +148,7 @@ function checkMessage(params) {
   };
 }
 
-function formatAddIssue(params) {
+function formatAddIssue (params) {
   const { czConfig, commitMsgFileName, lines, fs, execSync } = params;
   let lastLine;
   const appendIssue = czConfig.appendIssueFromBranchName !== undefined ? czConfig.appendIssueFromBranchName : false;
@@ -184,13 +176,12 @@ function formatAddIssue(params) {
  * @param params
  * @return {*}
  */
-function validateMessage(params) {
+function validateMessage (params) {
   const { lines, msg: fullMsg, czConfig } = params;
   const firstLine = lines[0];
-
   // Allowed scope and types. These are mandatory, but guard against it anyway
-  const TYPES = (czConfig.types || []).map((item) => item.value);
-  const SCOPES = (czConfig.scopes || []).map((item) => item.name);
+  const TYPES = (czConfig.types || []).map(item => item.value);
+  const SCOPES = (czConfig.scopes || []).map(item => item.name);
   const SCOPE_OVERRIDES = czConfig.scopeOverrides || {};
 
   const allowCustomScopes = czConfig.allowCustomScopes !== undefined ? !!czConfig.allowCustomScopes : false; // Convert to boolean. If undefined, do not allow custom scopes.
@@ -209,22 +200,24 @@ function validateMessage(params) {
       status: false,
     };
   }
-
+  // const PATTERN = /^(?:fixup!\s*)?(\w*)(\(([\w$.\-*/]+)\))*: (.*)$/; // type(scope-min-3-chars): min-5-chars-starting-with-lowercase-letter
+  // /^(?:fixup!\s*)?(\w*)(\(([\w$.\-*/]+)\))*: (.*)$/;
+  const regStr = '^(' + TYPES.join('|') + '){1}(\\(([\\w$.\\-*/]+)\\))*: (.*)$';
+  // /^(✨feat|🐛修复|📝文档|💄格式|♻️重构|⚡️性能|✅测试|🔧工具|⏪回滚){1}(?:fixup!\s*)?(\w*)(\(([\w$.\-*/]+)\))*: (.*)$/
+  const PATTERN = new RegExp(regStr);
   const match = PATTERN.exec(firstLine);
-
   if (!match) {
     return {
-      message: `Does not match "<type>(<scope>): <subject-starting-with-lowercase-letter>"! Was: ${firstLine}`,
+      message: `Does not match "${regStr}" Was: ${firstLine}`,
       status: false,
     };
   }
-
   const type = match[1];
-  const scope = match[3]; // This may be undefined, because scope is optional. e.g. 'feat: foo' is perfectly fine
+  const scope = match[2]; // This may be undefined, because scope is optional. e.g. 'feat: foo' is perfectly fine
   const subject = match[4];
   let allowedScopesForType = SCOPE_OVERRIDES[type] ? SCOPE_OVERRIDES[type] : [];
 
-  allowedScopesForType = allowedScopesForType.map((item) => item.name).concat(SCOPES);
+  allowedScopesForType = allowedScopesForType.map(item => item.name).concat(SCOPES);
 
   if (!TYPES.length) {
     return {
@@ -264,12 +257,14 @@ function validateMessage(params) {
     };
   }
 
-  // Make sure the scope word is lowercase, and more than 4 chars
-  if (!subject.length || subject[0] === subject[0].toUpperCase()) {
-    return {
-      message: `"${subject.trim()}" must start with a lower-case character (and use imperative language)`,
-      status: false,
-    };
+  if (!czConfig.hasChinese) {
+    // Make sure the scope word is lowercase, and more than 4 chars
+    if (!subject.length || subject[0] === subject[0].toUpperCase()) {
+      return {
+        message: `"${subject.trim()}" must start with a lower-case character (and use imperative language)`,
+        status: false,
+      };
+    }
   }
 
   if (subject.split(' ')[0].length < MIN_SUBJECT_LENGTH) {
@@ -299,11 +294,11 @@ function validateMessage(params) {
   return { status: true };
 }
 
-function getLinesFromBuffer(buffer) {
+function getLinesFromBuffer (buffer) {
   return buffer.toString().split('\n');
 }
 
-function getIssueFromBranch(branchName, regexStr) {
+function getIssueFromBranch (branchName, regexStr) {
   if (!regexStr) {
     return branchName;
   }
@@ -315,7 +310,7 @@ function getIssueFromBranch(branchName, regexStr) {
   return branchName;
 }
 
-function appendIssueToCommit(lines, issue) {
+function appendIssueToCommit (lines, issue) {
   let result = '';
   let lastLine = '';
   let i = lines.length - 1;
